@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hasil Penggunaan Chemical Harian</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Hasil Penggunaan Chemical Harian</h1>
+        <div class="form-group">
+            <label for="filterBulan">Filter berdasarkan Bulan:</label>
+            <input type="month" class="form-control" id="filterBulan">
+        </div>
+        <button id="filterButton" class="btn btn-primary btn-block mb-4">Filter</button>
+        <button id="deleteButton" class="btn btn-danger btn-block mb-4">Hapus Data Terpilih</button>
+        <button id="exportButton" class="btn btn-success btn-block mb-4">Ekspor ke Teks</button>
+        <button id="backButton" class="btn btn-secondary btn-block mb-4">Kembali ke index.html</button>
+        <div class="table-responsive">
+            <table class="table table-bordered" id="resultsTable">
+                <thead class="thead-light">
+                    <tr>
+                        <th rowspan="2"></th>
+                        <th rowspan="2">No</th>
+                        <th rowspan="2">Tanggal</th>
+                        <th rowspan="2">Operator</th>
+                        <th rowspan="2">Jam Kerja</th>
+                        <th colspan="3">Penggunaan Raw Water</th>
+                        <th colspan="3">Transfer Acid ke QMB</th>
+                        <th colspan="4">Penggunaan NaOH</th>
+                     </tr>
+                     <tr>
+                        <th>Meteran Awal (m³)</th>
+                        <th>Meteran Akhir (m³)</th>
+                        <th>Total Penggunaan (m³)</th>
+                        <th>Meteran Awal (m³)</th>
+                        <th>Meteran Akhir (m³)</th>
+                        <th>Total Transfer(m³)</th>
+                        <th>Stok (bag)</th>
+                        <th>Masuk (bag)</th>
+                        <th>Digunakan (bag)</th>
+                        <th>Sisa Stok (bag)</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody">
+                    <!-- Data akan dimasukkan di sini melalui JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
+        import { getDatabase, ref, get, query, orderByChild, startAt, endAt, remove } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCgjU5Pvh0DWOw4RrLsxyZ9vx6nP1o1v7U",
+            authDomain: "dryabsorbsi.firebaseapp.com",
+            databaseURL: "https://dryabsorbsi-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "dryabsorbsi",
+            storageBucket: "dryabsorbsi.appspot.com",
+            messagingSenderId: "767053020449",
+            appId: "1:767053020449:web:e07eb21b9642c246ca5260"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        document.getElementById('filterButton').addEventListener('click', fetchData);
+        document.getElementById('deleteButton').addEventListener('click', deleteSelectedData);
+        document.getElementById('exportButton').addEventListener('click', exportToText);
+        document.getElementById('backButton').addEventListener('click', () => window.location.href = 'index.html');
+
+        function fetchData() {
+            const filterBulan = document.getElementById('filterBulan').value;
+            if (filterBulan) {
+                const [year, month] = filterBulan.split('-');
+                const startDate = `${year}-${month}-01`;
+                const endDate = `${year}-${month}-31`;
+
+                console.log(`Fetching data from ${startDate} to ${endDate}`);
+
+                const dataQuery = query(ref(database, 'chemical-usage-data'), orderByChild('tanggal'), startAt(startDate), endAt(endDate));
+                get(dataQuery).then((snapshot) => {
+                    const data = snapshot.val();
+                    console.log('Data fetched:', data);
+                    const resultsBody = document.getElementById('resultsBody');
+                    resultsBody.innerHTML = ''; // Clear previous results
+
+                    if (data) {
+                        let nomor = 1;
+                        for (const key in data) {
+                            const entry = data[key];
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td><input type="checkbox" class="selectRow" data-key="${key}"></td>
+                                <td>${nomor++}</td>
+                                <td>${entry.tanggal}</td>
+                                <td>${entry.operator}</td>
+                                <td>${entry.shift}</td>
+                                <td>${entry.meterAwalRawWater}</td>
+                                <td>${entry.meterAkhirRawWater}</td>
+                                <td>${entry.rawWaterUsage.toFixed(2)}</td>
+                                <td>${entry.meterAwalAcidQMB}</td>
+                                <td>${entry.meterAkhirAcidQMB}</td>
+                                <td>${entry.acidQMBUsage.toFixed(2)}</td>
+                                <td>${entry.stokNaOH}</td>
+                                <td>${entry.naohMasuk}</td>
+                                <td>${entry.naohUsed}</td>
+                                <td>${entry.sisaStokNaOH.toFixed(2)}</td>
+                            `;
+                            resultsBody.appendChild(row);
+                        }
+                    } else {
+                        const row = document.createElement('tr');
+                        row.innerHTML = '<td colspan="14">No data found for the selected month.</td>';
+                        resultsBody.appendChild(row);
+                    }
+                }).catch((error) => {
+                    console.error('Error fetching data:', error);
+                    alert('Terjadi kesalahan saat mengambil data');
+                });
+            } else {
+                alert('Silakan pilih bulan terlebih dahulu.');
+            }
+        }
+
+        function deleteSelectedData() {
+            const selectedCheckboxes = document.querySelectorAll('.selectRow:checked');
+            const promises = [];
+
+            selectedCheckboxes.forEach(checkbox => {
+                const key = checkbox.getAttribute('data-key');
+                const dataRef = ref(database, `chemical-usage-data/${key}`);
+                promises.push(remove(dataRef));
+            });
+
+            Promise.all(promises)
+                .then(() => {
+                    alert('Data yang dipilih telah dihapus.');
+                    fetchData(); // Refresh data after deletion
+                })
+                .catch(error => {
+                    console.error('Error deleting data:', error);
+                    alert('Terjadi kesalahan saat menghapus data');
+                });
+        }
+
+        function exportToText() {
+            const selectedCheckboxes = document.querySelectorAll('.selectRow:checked');
+            if (selectedCheckboxes.length === 0) {
+                alert('Silakan pilih setidaknya satu baris data untuk diekspor.');
+                return;
+            }
+
+            let laporan = "Laporan penggunaan raw water dan chemical di *4212 & 4214 (Dry and abs)*\n\n";
+
+            selectedCheckboxes.forEach((checkbox, index) => {
+                const row = checkbox.closest('tr');
+                const tanggal = row.children[2].textContent;
+                const operator = row.children[3].textContent;
+                const shift = row.children[4].textContent;
+                const meterAwalRawWater = row.children[5].textContent;
+                const meterAkhirRawWater = row.children[6].textContent;
+                const rawWaterUsage = row.children[7].textContent;
+                const meterAwalAcidQMB = row.children[8].textContent;
+                const meterAkhirAcidQMB = row.children[9].textContent;
+                const acidQMBUsage = row.children[10].textContent;
+                const stokNaOH = row.children[11].textContent;
+                const naohMasuk = row.children[12].textContent;
+                const naohUsed = row.children[13].textContent;
+                const sisaStokNaOH = row.children[14].textContent;
+
+                laporan += `${index + 1}. Tanggal: ${tanggal}\n`;
+                laporan += `   Jam Kerja: ${shift}\n`;
+                laporan += `   Operator: ${operator}\n`;
+                laporan += `\n   1. Raw water\n`;
+                laporan += `      Meteran Awal     = ${meterAwalRawWater} m³\n`;
+                laporan += `      Meteran Akhir    = ${meterAkhirRawWater} m³\n`;
+                laporan += `      Total Penggunaan = ${rawWaterUsage} m³\n`;
+                laporan += `\n   2. NaOH\n`;
+                laporan += `      NaOH dilarutkan (bag) = ${naohUsed} bag\n`;
+                laporan += `      Total                 (kg) = 25 kg x ${naohUsed}\n`;
+                laporan += `      NaOH masuk (bag)     = ${naohMasuk} bag\n`;
+                laporan += `      Sisa Stok NaOH (bag) = ${sisaStokNaOH} bag\n`;
+                laporan += `\n   3. Total Transfer Acid ke QMB\n`;
+                laporan += `      Meteran awal (m³)    = ${meterAwalAcidQMB} m³\n`;
+                laporan += `      Meteran akhir (m³)   = ${meterAkhirAcidQMB} m³\n`;
+                laporan += `      Total Transfer (m³)  = ${acidQMBUsage} m³\n`;
+                laporan += `      Total Asam Sulfat (ton) = ${acidQMBUsage} m³ x 1,82 = ${(acidQMBUsage * 1.82).toFixed(2)} ton\n\n`;
+            });
+
+            laporan += `\n*1 bag padatan NaOH = 25 Kg\n**Nilai saat handover shift\n***Nilai densitas H2SO4 = 1,82 gr/cm³\n`;
+
+            const textArea = document.createElement('textarea');
+            textArea.value = laporan;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            alert('Laporan telah disalin ke clipboard.');
+        }
+
+        // Fetch data for the current month when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const now = new Date();
+            const currentMonth = now.toISOString().slice(0, 7); // Format YYYY-MM
+            document.getElementById('filterBulan').value = currentMonth;
+            fetchData();
+        });
+    </script>
+</body>
+</html>

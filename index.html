@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perhitungan Penggunaan Chemical Harian</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input, select {
+            width: calc(100%);
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .result {
+            margin-top: 20px;
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .result p {
+            margin: 0;
+        }
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Perhitungan Penggunaan Chemical Harian</h1>
+        
+        <form id="chemicalForm">
+            
+            <label for="shift">Jam Kerja</label>
+            <select id="shift" required>
+                <option value="Pagi">Shift Pagi</option>
+                <option value="Malam">Shift Malam</option>
+            </select>
+            
+            <label for="tanggal">Tanggal</label>
+            <input type="date" id="tanggal" required>
+
+            <button type="button" id="fetchDataButton">Ambil Data</button>
+            <h2>Meteran Awal Penggunaan</h2>
+
+            <label for="meterAwalRawWater">Meteran Awal Raw Water (m³)</label>
+            <input type="number" id="meterAwalRawWater" required>
+            
+            <label for="meterAwalAcidQMB">Meteran Awal Acid ke QMB (m³)</label>
+            <input type="number" id="meterAwalAcidQMB" required>
+            
+            <label for="stokNaOH">Stok NaOH (bag)</label>
+            <input type="number" id="stokNaOH" required>
+            
+            <label for="naohMasuk">NaOH yang Masuk (bag)</label>
+            <input type="number" id="naohMasuk">
+
+            <h2>Meteran Akhir Penggunaan</h2>
+            
+            <label for="operator">Nama Operator</label>
+            <input type="text" id="operator" required>
+            	
+            <label for="meterAkhirRawWater">Meteran Akhir Raw Water (m³)</label>
+            <input type="number" id="meterAkhirRawWater" required>
+            
+            <label for="meterAkhirAcidQMB">Meteran Akhir Acid ke QMB (m³)</label>
+            <input type="number" id="meterAkhirAcidQMB" required>
+            
+            <label for="naohUsed">NaOH Digunakan (bag)</label>
+            <input type="number" id="naohUsed" required>
+            
+            
+
+            <div class="button-container">
+                <button type="button" id="calculateButton">Hitung</button>
+                <a href="results.html"><button type="button">Lihat Hasil</button></a>
+            </div>
+        </form>
+        
+        <div id="results" class="result" style="display: none;">
+            <p id="rawWaterUsage"></p>
+            <p id="acidQMBUsage"></p>
+            <p id="sisaStokNaOH"></p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
+        import { getDatabase, ref, get, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-database.js";
+        import { push, set } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCgjU5Pvh0DWOw4RrLsxyZ9vx6nP1o1v7U",
+            authDomain: "dryabsorbsi.firebaseapp.com",
+            databaseURL: "https://dryabsorbsi-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "dryabsorbsi",
+            storageBucket: "dryabsorbsi.appspot.com",
+            messagingSenderId: "767053020449",
+            appId: "1:767053020449:web:e07eb21b9642c246ca5260"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        function fetchPreviousData(shift, tanggal) {
+            const previousShift = shift === 'Pagi' ? 'Malam' : 'Pagi';
+            const previousDate = new Date(tanggal);
+            if (shift === 'Pagi') {
+                previousDate.setDate(previousDate.getDate() - 1);
+            }
+
+            const previousDateString = previousDate.toISOString().split('T')[0];
+
+            const previousDataQuery = query(ref(database, 'chemical-usage-data'), orderByChild('tanggal'), limitToLast(1));
+
+            get(previousDataQuery).then((snapshot) => {
+                if (snapshot.exists()) {
+                    const previousData = Object.values(snapshot.val())[0];
+                    if ((shift === 'Pagi' && previousData.shift === 'Malam' && previousData.tanggal === previousDateString) ||
+                        (shift === 'Malam' && previousData.shift === 'Pagi' && previousData.tanggal === tanggal)) {
+                        document.getElementById('meterAwalRawWater').value = previousData.meterAkhirRawWater;
+                        document.getElementById('meterAwalAcidQMB').value = previousData.meterAkhirAcidQMB;
+                        document.getElementById('stokNaOH').value = previousData.sisaStokNaOH;
+                    } else {
+                        alert('Data sebelumnya tidak ditemukan. Silakan isi secara manual.');
+                    }
+                } else {
+                    alert('Data sebelumnya tidak ditemukan. Silakan isi secara manual.');
+                }
+            }).catch((error) => {
+                console.error('Error fetching data:', error);
+                alert('Terjadi kesalahan saat mengambil data.');
+            });
+
+            const lastNaOHQuery = query(ref(database, 'chemical-usage-data'), orderByChild('tanggal'), limitToLast(1));
+
+            get(lastNaOHQuery).then((snapshot) => {
+                if (snapshot.exists()) {
+                    const lastData = Object.values(snapshot.val())[0];
+                    document.getElementById('stokNaOH').value = lastData.sisaStokNaOH;
+                } else {
+                    alert('Data stok NaOH tidak ditemukan. Silakan isi secara manual.');
+                }
+            }).catch((error) => {
+                console.error('Error fetching data:', error);
+                alert('Terjadi kesalahan saat mengambil data stok NaOH.');
+            });
+        }
+
+        document.getElementById('fetchDataButton').addEventListener('click', () => {
+            const shift = document.getElementById('shift').value;
+            const tanggal = document.getElementById('tanggal').value;
+            if (shift && tanggal) {
+                fetchPreviousData(shift, tanggal);
+            } else {
+                alert('Silakan pilih shift dan tanggal terlebih dahulu.');
+            }
+        });
+
+        function calculateUsage() {
+            const meterAwalRawWater = parseFloat(document.getElementById('meterAwalRawWater').value);
+            const meterAkhirRawWater = parseFloat(document.getElementById('meterAkhirRawWater').value);
+            const meterAwalAcidQMB = parseFloat(document.getElementById('meterAwalAcidQMB').value);
+            const meterAkhirAcidQMB = parseFloat(document.getElementById('meterAkhirAcidQMB').value);
+            const stokNaOH = parseFloat(document.getElementById('stokNaOH').value);
+            const naohUsed = parseFloat(document.getElementById('naohUsed').value);
+            const naohMasuk = parseFloat(document.getElementById('naohMasuk').value) || 0; // Default to 0 if NaOH yang masuk is NaOH yang masuk is empty.
+
+            const rawWaterUsage = meterAkhirRawWater - meterAwalRawWater;
+            const acidQMBUsage = meterAkhirAcidQMB - meterAwalAcidQMB;
+            const sisaStokNaOH = stokNaOH - naohUsed + naohMasuk;
+
+            document.getElementById('rawWaterUsage').textContent = `Penggunaan Raw Water: ${rawWaterUsage.toFixed(2)} m³`;
+            document.getElementById('acidQMBUsage').textContent = `Penggunaan Acid ke QMB: ${acidQMBUsage.toFixed(2)} m³`;
+            document.getElementById('sisaStokNaOH').textContent = `Sisa Stok NaOH: ${sisaStokNaOH.toFixed(2)} bag`;
+
+            document.getElementById('results').style.display = 'block';
+
+            const shift = document.getElementById('shift').value;
+            const operator = document.getElementById('operator').value;
+            const tanggal = document.getElementById('tanggal').value;
+
+            const newUsageRef = push(ref(database, 'chemical-usage-data'));
+            set(newUsageRef, {
+                shift,
+                operator,
+                tanggal,
+                meterAwalRawWater,
+                meterAkhirRawWater,
+                meterAwalAcidQMB,
+                meterAkhirAcidQMB,
+                stokNaOH,
+                naohUsed,
+                naohMasuk,
+                rawWaterUsage,
+                acidQMBUsage,
+                sisaStokNaOH
+            }).then(() => {
+                alert('Data berhasil disimpan');
+            }).catch((error) => {
+                console.error('Error saving data:', error);
+                alert('Terjadi kesalahan saat menyimpan data');
+            });
+        }
+
+        document.getElementById('calculateButton').addEventListener('click', calculateUsage);
+    </script>
+</body>
+</html>
