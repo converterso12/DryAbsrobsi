@@ -6,14 +6,11 @@
     <title>Perhitungan Penggunaan Chemical Harian</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        
         .container {
             max-width: 800px;
-            
             padding: 20px;
             background-color: #fff;
             border-radius: 8px;
-            
         }
         h1, h2 {
             text-align: center;
@@ -25,7 +22,7 @@
             font-weight: bold;
         }
         input, select {
-            width: calc(95%);
+            width: calc(100%);
             padding: 10px;
             margin-right: 20px;
             margin-bottom: 20px;
@@ -64,62 +61,50 @@
 <body>
     <div class="container">
         <h1>Perhitungan Penggunaan Chemical Harian</h1>
-        
         <form id="chemicalForm">
-            
+        	<label for="operator">Nama Operator</label>
+            <input type="text" id="operator" required>
             <label for="shift">Jam Kerja</label>
             <select id="shift" required>
                 <option value="Pagi">Shift Pagi</option>
                 <option value="Malam">Shift Malam</option>
             </select>
-            
             <label for="tanggal">Tanggal</label>
             <input type="date" id="tanggal" required>
-
             <button type="button" id="fetchDataButton">Ambil Data</button>
-            <h2>Meteran Awal Penggunaan</h2>
-
+            <h2>Raw Water</h2>
             <label for="meterAwalRawWater">Meteran Awal Raw Water (m³)</label>
             <input type="number" id="meterAwalRawWater" required>
-            
+            	<label for="meterAkhirRawWater">Meteran Akhir Raw Water (m³)</label>
+            <input type="number" id="meterAkhirRawWater" required>
+            	<h2>Acid Transfer to QMB</h2>
             <label for="meterAwalAcidQMB">Meteran Awal Acid ke QMB (m³)</label>
             <input type="number" id="meterAwalAcidQMB" required>
-            
+            	<label for="meterAkhirAcidQMB">Meteran Akhir Acid ke QMB (m³)</label>
+            <input type="number" id="meterAkhirAcidQMB" required>
+            	<h2>Penggunaan NaOH</h2>
             <label for="stokNaOH">Stok NaOH (bag)</label>
             <input type="number" id="stokNaOH" required>
-            
             <label for="naohMasuk">NaOH yang Masuk (bag)</label>
             <input type="number" id="naohMasuk">
-
-            <h2>Meteran Akhir Penggunaan</h2>
             
-            <label for="operator">Nama Operator</label>
-            <input type="text" id="operator" required>
-            	
-            <label for="meterAkhirRawWater">Meteran Akhir Raw Water (m³)</label>
-            <input type="number" id="meterAkhirRawWater" required>
             
-            <label for="meterAkhirAcidQMB">Meteran Akhir Acid ke QMB (m³)</label>
-            <input type="number" id="meterAkhirAcidQMB" required>
+            
             
             <label for="naohUsed">NaOH Digunakan (bag)</label>
             <input type="number" id="naohUsed" required>
-            
-            
-
             <div class="button-container">
                 <button type="button" id="calculateButton">Hitung</button>
+                <button type="button" id="exportButton">Salin Laporan</button>
                 <a href="results.html"><button type="button">Lihat Hasil</button></a>
             </div>
         </form>
-        
         <div id="results" class="result" style="display: none;">
             <p id="rawWaterUsage"></p>
             <p id="acidQMBUsage"></p>
             <p id="sisaStokNaOH"></p>
         </div>
     </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
         import { getDatabase, ref, get, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-database.js";
@@ -200,7 +185,7 @@
             const meterAkhirAcidQMB = parseFloat(document.getElementById('meterAkhirAcidQMB').value);
             const stokNaOH = parseFloat(document.getElementById('stokNaOH').value);
             const naohUsed = parseFloat(document.getElementById('naohUsed').value);
-            const naohMasuk = parseFloat(document.getElementById('naohMasuk').value) || 0; // Default to 0 if NaOH yang masuk is NaOH yang masuk is empty.
+            const naohMasuk = parseFloat(document.getElementById('naohMasuk').value) || 0;
 
             const rawWaterUsage = meterAkhirRawWater - meterAwalRawWater;
             const acidQMBUsage = meterAkhirAcidQMB - meterAwalAcidQMB;
@@ -240,6 +225,57 @@
         }
 
         document.getElementById('calculateButton').addEventListener('click', calculateUsage);
+
+        function exportToText() {
+            const shift = document.getElementById('shift').value;
+            const tanggal = document.getElementById('tanggal').value;
+            const operator = document.getElementById('operator').value;
+            const meterAwalRawWater = document.getElementById('meterAwalRawWater').value;
+            const meterAkhirRawWater = document.getElementById('meterAkhirRawWater').value;
+            const rawWaterUsage = (meterAkhirRawWater - meterAwalRawWater);
+            const meterAwalAcidQMB = document.getElementById('meterAwalAcidQMB').value;
+            const meterAkhirAcidQMB = document.getElementById('meterAkhirAcidQMB').value;
+            const acidQMBUsage = (meterAkhirAcidQMB - meterAwalAcidQMB).toFixed(2);
+            const stokNaOH = document.getElementById('stokNaOH').value;
+            const naohMasuk = document.getElementById('naohMasuk').value || 0;
+            const naohUsed = document.getElementById('naohUsed').value;
+            const sisaStokNaOH = (parseFloat(stokNaOH) - parseFloat(naohUsed) + parseFloat(naohMasuk));
+            const totalNaOHKg = (25 * parseFloat(naohUsed));
+            const totalAcidT = (1.82 * parseFloat(acidQMBUsage));
+            
+
+            let laporan = "Laporan penggunaan raw water dan chemical di *4212 & 4214 (Dry and abs)*\n\n";
+            laporan += `*Tanggal:* ${tanggal}\n`;
+            laporan += `*Jam Kerja:* ${shift}\n`;
+            laporan += `*Operator:* ${operator}\n\n`;
+            laporan += `*1. Raw water*\n`;
+            laporan += `  Meteran Awal     = ${meterAwalRawWater} m³\n`;
+            laporan += `  Meteran Akhir    = ${meterAkhirRawWater} m³\n`;
+            laporan += `  *Total Penggunaan = ${rawWaterUsage} m³*\n\n`;
+            laporan += `*2. NaOH*\n`;
+            laporan += `  NaOH dilarutkan (bag) = ${naohUsed} bag\n`;
+            laporan += `  Total                 (kg) = ${totalNaOHKg} kg\n`;
+            laporan += `  NaOH masuk (bag)     = ${naohMasuk} bag\n`;
+            laporan += `  *Sisa Stok NaOH (bag) = ${sisaStokNaOH} bag*\n\n`;
+            laporan += `*3. Total Transfer Acid ke QMB*\n`;
+            laporan += `  Meteran awal (m³)    = ${meterAwalAcidQMB} m³\n`;
+            laporan += `  Meteran akhir (m³)   = ${meterAkhirAcidQMB} m³\n`;
+            laporan += `  *Total Transfer (m³)  = ${acidQMBUsage} m³*\n`;
+            laporan += `   *${acidQMBUsage} x 1,82*** *(ton) = ${totalAcidT.toFixed(2)} ton*\n\n`;
+            
+            laporan += `*1 bag padatan NaOH = 25 Kg\n**Nilai saat handover shift\n***Nilai densitas H2SO4 = 1,82 gr/cm³\n`;
+
+            const textArea = document.createElement('textarea');
+            textArea.value = laporan;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            alert('Laporan telah disalin ke clipboard.');
+        }
+
+        document.getElementById('exportButton').addEventListener('click', exportToText);
     </script>
 </body>
-</html>
+    </html>
